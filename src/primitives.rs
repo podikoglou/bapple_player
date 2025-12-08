@@ -106,7 +106,8 @@ impl Bapple {
             let task_time = Instant::now();
             let decompressed_frame =
                 decode_all(&*self.compressed_frames[self.counter])?;
-            lock.write_all(b"\r\x1b[2J\r\x1b[H")?;
+            lock.write_all(b"\r\x1b[H")?;
+
             lock.write_all(&decompressed_frame)?;
             lock.flush()?;
 
