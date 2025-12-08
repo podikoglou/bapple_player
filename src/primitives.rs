@@ -102,6 +102,9 @@ impl Bapple {
 
         let mut lock = stdout().lock();
 
+        lock.write_all(b"\x1b[2J\x1b[H")?;
+        lock.write_all(b"\x1b[?25l")?;
+
         while self.counter < self.length {
             let task_time = Instant::now();
             let decompressed_frame =
@@ -126,6 +129,8 @@ impl Bapple {
                 sleep(self.frametime - elapsed);
             }
         }
+
+        lock.write_all(b"\x1b[?25h")?;
         self.counter = 0;
         SYNC_COUNTER.store(0, Ordering::Relaxed);
         Ok(())
