@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Cursor, Read, Write, stdout},
+    io::{self, Cursor, Read, Write, stdout},
     path::PathBuf,
     process::exit,
     sync::{Arc, atomic::Ordering},
@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use clap::{Parser, command, crate_version};
+use clap::{Parser, crate_version};
 use rodio::{Decoder, OutputStreamBuilder, Sink, Source};
 use ron::de::from_bytes;
 use serde::Deserialize;
@@ -16,7 +16,7 @@ use tar::{Archive, Entry};
 use zstd::decode_all;
 
 use crate::{
-    Res,
+    Res, STOP,
     backup_counter::{SYNC_COUNTER, outside_counter},
     messages::FRAMETIME_ZERO,
 };
@@ -28,6 +28,12 @@ pub struct Bapple {
     frametime: Duration,
     counter: usize,
     length: usize,
+}
+
+impl Drop for Bapple {
+    fn drop(&mut self) {
+        show_cursor(&mut stdout().lock()).unwrap();
+    }
 }
 
 impl Bapple {
@@ -82,8 +88,8 @@ impl Bapple {
         if self.has_audio {
             let decoder = Decoder::new_mp3(Cursor::new(self.audio.clone()))?;
             let inner_total = decoder.total_duration().ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
                     "Unable to determine audio duration",
                 )
             })?;
@@ -102,15 +108,15 @@ impl Bapple {
 
         let mut lock = stdout().lock();
 
-        lock.write_all(b"\x1b[2J\x1b[H")?;
-        lock.write_all(b"\x1b[?25l")?;
+        clear(&mut lock)?;
+        hide_cursor(&mut lock)?;
 
         while self.counter < self.length {
             let task_time = Instant::now();
             let decompressed_frame =
                 decode_all(&*self.compressed_frames[self.counter])?;
-            lock.write_all(b"\r\x1b[H")?;
 
+            return_home(&mut lock)?;
             lock.write_all(&decompressed_frame)?;
             lock.flush()?;
 
@@ -120,17 +126,24 @@ impl Bapple {
                 // Same condition, safe unwrap.
                 self.counter =
                     self.get_pos(sink.as_ref().unwrap(), total.unwrap());
+                if STOP.load(Ordering::Relaxed) {
+                    return Err("Stopped".into());
+                }
             } else {
                 self.backup_resync();
+                if STOP.load(Ordering::Relaxed) {
+                    return Err("Stopped".into());
+                }
             }
 
-            let elapsed = task_time.elapsed();
-            if elapsed < self.frametime {
-                sleep(self.frametime - elapsed);
+            if let Some(remaining) =
+                self.frametime.checked_sub(task_time.elapsed())
+            {
+                sleep(remaining);
             }
         }
 
-        lock.write_all(b"\x1b[?25h")?;
+        show_cursor(&mut lock)?;
         self.counter = 0;
         SYNC_COUNTER.store(0, Ordering::Relaxed);
         Ok(())
@@ -167,7 +180,7 @@ impl Bapple {
     }
 
     fn process_frames(
-        entry: Result<Entry<'_, File>, std::io::Error>,
+        entry: Result<Entry<'_, File>, io::Error>,
         has_audio: &mut bool,
         audio: &mut Vec<u8>,
         outer_frametime: &mut u64,
@@ -229,3 +242,17 @@ pub struct Metadata {
     /// DEPRECATED
     fps: u64,
 }
+
+macro_rules! write_fn {
+    ($fn_name:ident, $val:expr) => {
+        #[inline]
+        fn $fn_name<W: std::io::Write>(w: &mut W) -> std::io::Result<()> {
+            w.write_all($val)
+        }
+    };
+}
+
+write_fn!(clear, b"\r\x1b[2J\x1b[H");
+write_fn!(show_cursor, b"\x1b[?25h");
+write_fn!(hide_cursor, b"\x1b[?25l");
+write_fn!(return_home, b"\x1b[H");

@@ -1,4 +1,6 @@
 #![warn(clippy::pedantic)]
+use std::sync::atomic::AtomicBool;
+
 use clap::Parser;
 
 use crate::primitives::{Args, Bapple};
@@ -9,7 +11,10 @@ mod backup_counter;
 mod messages;
 mod primitives;
 
+static STOP: AtomicBool = AtomicBool::new(false);
+
 fn main() -> Res<()> {
+    ctrlc::set_handler(ctrl_c)?;
     let args = Args::parse();
 
     let mut bapple = Bapple::new(args.file)?;
@@ -25,4 +30,8 @@ fn main() -> Res<()> {
         }
     }
     Ok(())
+}
+
+fn ctrl_c() {
+    STOP.store(true, std::sync::atomic::Ordering::Relaxed);
 }
