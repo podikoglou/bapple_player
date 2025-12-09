@@ -32,7 +32,7 @@ pub struct Bapple {
 
 impl Drop for Bapple {
     fn drop(&mut self) {
-        show_cursor(&mut stdout().lock()).unwrap();
+        let _ = show_cursor(&mut stdout().lock());
     }
 }
 
