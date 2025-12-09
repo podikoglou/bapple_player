@@ -115,6 +115,10 @@ impl Bapple {
         hide_cursor(&mut lock)?;
 
         while self.counter < self.length {
+            if STOP.load(Ordering::Relaxed) {
+                break;
+            }
+
             let task_time = Instant::now();
             let decompressed_frame =
                 decode_all(&*self.compressed_frames[self.counter])?;
@@ -129,14 +133,8 @@ impl Bapple {
                 // Same condition, safe unwrap.
                 self.counter =
                     self.get_pos(sink.as_ref().unwrap(), total.unwrap());
-                if STOP.load(Ordering::Relaxed) {
-                    break;
-                }
             } else {
                 self.backup_resync();
-                if STOP.load(Ordering::Relaxed) {
-                    break;
-                }
             }
 
             if let Some(remaining) =
@@ -263,9 +261,14 @@ fn enable_virtual_terminal_processing() {
                 if SetConsoleMode(
                     handle,
                     mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-                ) == 0 {
-                    eprintln!("Warning: Failed to enable virtual terminal processing");
+                ) == 0
+                {
+                    eprintln!(
+                        "Warning: Failed to enable virtual terminal processing"
+                    );
                 }
+            } else {
+                eprintln!("Warning: Failed to get console mode");
             }
         }
     }
