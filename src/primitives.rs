@@ -108,6 +108,9 @@ impl Bapple {
 
         let mut lock = stdout().lock();
 
+        #[cfg(windows)]
+        enable_virtual_terminal_processing();
+
         clear(&mut lock)?;
         hide_cursor(&mut lock)?;
 
@@ -241,6 +244,29 @@ pub struct Metadata {
     frametime: u64,
     /// DEPRECATED
     fps: u64,
+}
+
+#[cfg(windows)]
+fn enable_virtual_terminal_processing() {
+    use winapi::um::consoleapi::GetConsoleMode;
+    use winapi::um::consoleapi::SetConsoleMode;
+    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::STD_OUTPUT_HANDLE;
+    use winapi::um::wincon::ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if handle != INVALID_HANDLE_VALUE {
+            let mut mode = 0;
+            if GetConsoleMode(handle, &mut mode) != 0 {
+                SetConsoleMode(
+                    handle,
+                    mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+                );
+            }
+        }
+    }
 }
 
 macro_rules! write_fn {
