@@ -130,12 +130,12 @@ impl Bapple {
                 self.counter =
                     self.get_pos(sink.as_ref().unwrap(), total.unwrap());
                 if STOP.load(Ordering::Relaxed) {
-                    return Err("Stopped".into());
+                    break;
                 }
             } else {
                 self.backup_resync();
                 if STOP.load(Ordering::Relaxed) {
-                    return Err("Stopped".into());
+                    break;
                 }
             }
 
