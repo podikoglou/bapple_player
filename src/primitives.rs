@@ -260,10 +260,12 @@ fn enable_virtual_terminal_processing() {
         if handle != INVALID_HANDLE_VALUE {
             let mut mode = 0;
             if GetConsoleMode(handle, &mut mode) != 0 {
-                SetConsoleMode(
+                if SetConsoleMode(
                     handle,
                     mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-                );
+                ) == 0 {
+                    eprintln!("Warning: Failed to enable virtual terminal processing");
+                }
             }
         }
     }
